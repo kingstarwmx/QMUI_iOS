@@ -359,7 +359,34 @@ NSString *const kShouldFixTitleViewBugKey = @"kShouldFixTitleViewBugKey";
 }
 
 - (UIView *)qmui_contentView {
-    return [self valueForKeyPath:@"visualProvider.contentView"];
+    // 兼容 iOS 26：_UINavigationBarVisualProviderModernIOSSwift 不再保证存在 contentView 这个 KVC key。
+    // 优先走旧逻辑，失败时降级为从 subviews 中按类名查找导航栏内容容器，避免 NSUnknownKeyException。
+    UIView *contentView = nil;
+    static BOOL canUseLegacyContentViewKeyPath = YES;
+    if (canUseLegacyContentViewKeyPath) {
+        @try {
+            contentView = [self valueForKeyPath:@"visualProvider.contentView"];
+        } @catch (__unused NSException *exception) {
+            canUseLegacyContentViewKeyPath = NO;
+        }
+    }
+    if (contentView) {
+        return contentView;
+    }
+    
+    contentView = [self.subviews qmui_firstMatchWithBlock:^BOOL(__kindof UIView * _Nonnull item) {
+        NSString *className = NSStringFromClass(item.class);
+        return [className containsString:@"UINavigationBarContentView"];
+    }];
+    if (contentView) {
+        return contentView;
+    }
+    
+    contentView = [self.subviews qmui_firstMatchWithBlock:^BOOL(__kindof UIView * _Nonnull item) {
+        NSString *className = NSStringFromClass(item.class);
+        return [className hasSuffix:@"ContentView"] && [className containsString:@"NavigationBar"];
+    }];
+    return contentView;
 }
 
 - (void)qmuinb_fixTitleViewLayoutInIOS16 {
