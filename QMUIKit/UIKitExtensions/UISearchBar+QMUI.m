@@ -19,6 +19,18 @@
 #import "UIView+QMUI.h"
 #import "UIViewController+QMUI.h"
 
+/// 沿父视图链向上查找 UISearchBar，兼容 iOS 新版本插入中间宿主视图的情况。
+static UISearchBar *QMUISearchBarFromAncestorViews(UIView *view) {
+    UIView *currentView = view;
+    while (currentView) {
+        if ([currentView isKindOfClass:UISearchBar.class]) {
+            return (UISearchBar *)currentView;
+        }
+        currentView = currentView.superview;
+    }
+    return nil;
+}
+
 @interface UISearchBar ()
 
 @property(nonatomic, assign) CGFloat qmuisb_centerPlaceholderCachedWidth1;
@@ -60,7 +72,7 @@ QMUISynthesizeCGFloatProperty(qmuisb_centerPlaceholderCachedWidth2, setQmuisb_ce
         // iOS 13 开始 UISearchBar 内部的输入框、取消按钮等 subviews 都由这个 class 创建、管理
         ExtendImplementationOfVoidMethodWithoutArguments(NSClassFromString(@"_UISearchBarVisualProviderIOS"), NSSelectorFromString(@"setUpCancelButton"), ^(NSObject *selfObject) {
             UIButton *cancelButton = [selfObject qmui_valueForKey:@"cancelButton"];
-            UISearchBar *searchBar = (UISearchBar *)cancelButton.superview.superview.superview;
+            UISearchBar *searchBar = QMUISearchBarFromAncestorViews(cancelButton);
             QMUIAssert([searchBar isKindOfClass:UISearchBar.class], @"UISearchBar (QMUI)", @"Can not find UISearchBar from cancelButton");
             setupCancelButtonBlock(searchBar, cancelButton);
         });
@@ -68,7 +80,7 @@ QMUISynthesizeCGFloatProperty(qmuisb_centerPlaceholderCachedWidth2, setQmuisb_ce
         OverrideImplementation(NSClassFromString(@"UINavigationButton"), @selector(setEnabled:), ^id(__unsafe_unretained Class originClass, SEL originCMD, IMP (^originalIMPProvider)(void)) {
             return ^(UIButton *selfObject, BOOL firstArgv) {
                 
-                UISearchBar *searchBar = (UISearchBar *)selfObject.superview.superview.superview;;
+                UISearchBar *searchBar = QMUISearchBarFromAncestorViews(selfObject);
                 if ([searchBar isKindOfClass:UISearchBar.class] && searchBar.qmui_alwaysEnableCancelButton && !searchBar.qmui_searchController) {
                     firstArgv = YES;
                 }
@@ -158,7 +170,7 @@ QMUISynthesizeCGFloatProperty(qmuisb_centerPlaceholderCachedWidth2, setQmuisb_ce
         // -[UISearchBarTextField setFrame:]
         OverrideImplementation(NSClassFromString([NSString stringWithFormat:@"%@%@",@"UISearchBarText", @"Field"]), @selector(setFrame:), ^id(__unsafe_unretained Class originClass, SEL originCMD, IMP (^originalIMPProvider)(void)) {
             return ^(UITextField *textField, CGRect frame) {
-                UISearchBar *searchBar = (UISearchBar *)textField.superview.superview.superview;;
+                UISearchBar *searchBar = QMUISearchBarFromAncestorViews(textField);
                 QMUIAssert(searchBar == nil || [searchBar isKindOfClass:[UISearchBar class]], @"UISearchBar (QMUI)", @"not a searchBar");
                 if (searchBar) {
                     frame = [searchBar qmuisb_adjustedSearchTextFieldFrameByOriginalFrame:frame];
